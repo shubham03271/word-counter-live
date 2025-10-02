@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Word Counter</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: #0b1220;
+      --accent: #60a5fa;
+      --muted: #94a3b8;
+      --text: #e6eef8;
+    }
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+      background: linear-gradient(180deg, var(--bg), #071028);
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+    .card {
+      width: 900px;
+      max-width: 100%;
+      background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+      border-radius: 12px;
+      padding: 22px;
+      box-shadow: 0 8px 30px rgba(2,6,23,0.6);
+      border: 1px solid rgba(255,255,255,0.03);
+    }
+    h1 { margin: 0 0 12px 0; font-size: 20px; color: var(--accent); }
+    textarea {
+      width: 100%;
+      min-height: 180px;
+      resize: vertical;
+      border-radius: 8px;
+      padding: 14px;
+      font-size: 15px;
+      line-height: 1.5;
+      border: 1px solid rgba(255,255,255,0.04);
+      background: rgba(255,255,255,0.02);
+      color: var(--text);
+      outline: none;
+    }
+    .row { display: flex; gap: 16px; margin-top: 14px; flex-wrap: wrap; }
+    .stat {
+      background: rgba(255,255,255,0.015);
+      border-radius: 8px;
+      padding: 12px 14px;
+      min-width: 150px;
+      flex: 1 1 150px;
+      border: 1px solid rgba(255,255,255,0.02);
+    }
+    .stat strong { display:block; font-size: 20px; color: var(--accent); }
+    .stat small { color: var(--muted); display:block; margin-top:6px; font-size:13px; }
+    .controls { display:flex; gap:8px; margin-top: 14px; }
+    button {
+      background: var(--accent);
+      color: #001427;
+      border: none;
+      padding: 8px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    button.ghost {
+      background: transparent;
+      color: var(--text);
+      border: 1px solid rgba(255,255,255,0.04);
+    }
+    footer { margin-top: 12px; color: var(--muted); font-size: 13px; }
+    @media (max-width:600px){
+      .row { gap: 10px; }
+      .stat { min-width: 120px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="card" role="main" aria-labelledby="title">
+    <h1 id="title">Word Counter — characters, words, sentences (live)</h1>
+
+    <label for="input" style="display:block; margin-bottom:8px; color:var(--muted);">
+      Type or paste text below:
+    </label>
+    <textarea id="input" placeholder="Start typing..."></textarea>
+
+    <div class="controls" role="group" aria-label="Actions">
+      <button id="clear">Clear</button>
+      <button id="copy" class="ghost">Copy text</button>
+      <button id="download" class="ghost">Download .txt</button>
+    </div>
+
+    <div class="row" aria-live="polite" style="margin-top:16px;">
+      <div class="stat" title="Total characters (including spaces)">
+        <strong id="chars">0</strong>
+        <small>Characters (with spaces)</small>
+      </div>
+
+      <div class="stat" title="Total characters (excluding spaces)">
+        <strong id="charsNoSpaces">0</strong>
+        <small>Characters (no spaces)</small>
+      </div>
+
+      <div class="stat" title="Total words">
+        <strong id="words">0</strong>
+        <small>Words</small>
+      </div>
+
+      <div class="stat" title="Total sentences (., ! or ? endings counted)">
+        <strong id="sentences">0</strong>
+        <small>Sentences</small>
+      </div>
+
+      <div class="stat" title="Estimated reading time (approx)">
+        <strong id="reading">0 sec</strong>
+        <small>Est. reading time (200 wpm)</small>
+      </div>
+    </div>
+
+    <footer>
+      Tips: Double spaces or newlines won't create fake words. Sentences are detected by `. ! ?` endings. Results update as you type.
+    </footer>
+  </main>
+
+  <script>
+    // ---------- helpers ----------
+    const el = id => document.getElementById(id);
+
+    // Count characters including spaces
+    function countCharacters(text){
+      return text.length;
+    }
+
+    // Count characters excluding spaces (remove all whitespace characters)
+    function countCharactersNoSpaces(text){
+      // \s matches spaces, tabs, newlines, etc.
+      return text.replace(/\s/g, '').length;
+    }
+
+    // Count words: split on whitespace, filter out empty pieces
+    function countWords(text){
+      // Trim then split on one-or-more whitespace
+      const trimmed = text.trim();
+      if (!trimmed) return 0;
+      // split by any whitespace (space, newline, tab) and filter empty
+      const parts = trimmed.split(/\s+/).filter(Boolean);
+      return parts.length;
+    }
+
+    // Count sentences: count occurrences of sentence-ending punctuation groups
+    function countSentences(text){
+      // We'll treat ".","!","?" (including repeated like "?!") as sentence enders.
+      // Split on these but careful with abbreviations like "e.g." — simple heuristic
+      // We'll match sequences that end with .!? and then a space or linebreak or end of string.
+      if (!text.trim()) return 0;
+      // Use regex to find endings: a non-space followed by [.?!]+ then space or end
+      const matches = text.match(/[^.!?][.!?]+(?=\s|$)/g);
+      if (!matches) {
+        // fallback: if text ends with punctuation but didn't match above
+        return (text.trim().match(/[.!?]+$/) ? 1 : 0);
+      }
+      return matches.length;
+    }
+
+    function estimateReadingTime(words, wpm = 200){
+      if (words === 0) return '0 sec';
+      const minutes = words / wpm;
+      if (minutes < 1) return Math.round(minutes * 60) + ' sec';
+      const mins = Math.floor(minutes);
+      const secs = Math.round((minutes - mins) * 60);
+      return secs === 0 ? `${mins} min` : `${mins} min ${secs} sec`;
+    }
+
+    // ---------- wiring ----------
+    const input = el('input');
+    const outChars = el('chars');
+    const outCharsNoSpaces = el('charsNoSpaces');
+    const outWords = el('words');
+    const outSentences = el('sentences');
+    const outReading = el('reading');
+
+    function updateAll(){
+      const text = input.value;
+      const chars = countCharacters(text);
+      const charsNoSpaces = countCharactersNoSpaces(text);
+      const words = countWords(text);
+      const sentences = countSentences(text);
+      const reading = estimateReadingTime(words);
+
+      outChars.innerText = chars;
+      outCharsNoSpaces.innerText = charsNoSpaces;
+      outWords.innerText = words;
+      outSentences.innerText = sentences;
+      outReading.innerText = reading;
+    }
+
+    // Update live while typing and when pasting
+    input.addEventListener('input', updateAll);
+
+    // Buttons
+    el('clear').addEventListener('click', () => {
+      input.value = '';
+      updateAll();
+      input.focus();
+    });
+
+    el('copy').addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(input.value);
+        el('copy').innerText = 'Copied!';
+        setTimeout(()=> el('copy').innerText = 'Copy text', 1400);
+      } catch(e){
+        alert('Could not copy — your browser may block programmatic clipboard access.');
+      }
+    });
+
+    el('download').addEventListener('click', () => {
+      const blob = new Blob([input.value], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'text.txt';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    });
+
+    // initial calc
+    updateAll();
+  </script>
+</body>
+</html>
